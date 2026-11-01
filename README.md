@@ -33,6 +33,10 @@
 
 ## 快速啟動方式
 
+### 方式 0：直接下載 Windows 執行檔 (免安裝 Python)
+至 [GitHub Releases 頁面](https://github.com/okokkook1/file-converter/releases) 下載編譯完成的免安裝單一檔案：
+👉 **[下載最新版 FileConverter.exe](https://github.com/okokkook1/file-converter/releases/latest/download/FileConverter.exe)**
+
 ### 方式 1：雙擊批次檔啟動 (推薦)
 直接在檔案總管中雙擊：
 ```
