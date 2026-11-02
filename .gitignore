@@ -8,3 +8,4 @@ test_workspace/
 build/
 dist/
 *.spec
+*.zip

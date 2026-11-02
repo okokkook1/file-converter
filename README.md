@@ -33,9 +33,13 @@
 
 ## 快速啟動方式
 
-### 方式 0：直接下載 Windows 執行檔 (免安裝 Python)
-至 [GitHub Releases 頁面](https://github.com/okokkook1/file-converter/releases) 下載編譯完成的免安裝單一檔案：
-👉 **[下載最新版 FileConverter.exe](https://github.com/okokkook1/file-converter/releases/latest/download/FileConverter.exe)**
+### 方式 0：下載 Windows 綠色免安裝版 (推薦，秒速啟動)
+至 [GitHub Releases 頁面](https://github.com/okokkook1/file-converter/releases) 下載已預先編譯的離線壓縮檔：
+👉 **[下載 FileConverter-portable-windows.zip (離線秒開版)](https://github.com/okokkook1/file-converter/releases/latest/download/FileConverter-portable-windows.zip)**
+
+> **使用方法**：下載後解壓縮，直接雙擊資料夾內的 `FileConverter.exe` 或 `雙擊啟動.bat` 即可**瞬間啟動**（免解壓等待、不卡頓）。
+>
+> *(若偏好單一檔案，亦可在 Releases 頁面下載單一執行檔 `FileConverter.exe`)*
 
 ### 方式 1：雙擊批次檔啟動 (推薦)
 直接在檔案總管中雙擊：
