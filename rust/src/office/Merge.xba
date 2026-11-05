@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE script:module PUBLIC "-//OpenOffice.org//DTD OfficeDocument 1.0//EN" "module.dtd">
+<script:module xmlns:script="http://openoffice.org/2000/script" script:name="Module1" script:language="StarBasic"><![CDATA[
+Option Explicit
+
+Sub RunMerge()
+    On Error GoTo Failed
+    Dim job As Integer, target As String, source As String, stage As String
+    Dim doc As Object, cursor As Object
+    Dim loadArgs(2) As New com.sun.star.beans.PropertyValue
+    Dim saveArgs(0) As New com.sun.star.beans.PropertyValue
+
+    stage = "Prepare UNO options"
+    loadArgs(0).Name = "Hidden"
+    loadArgs(0).Value = True
+    loadArgs(1).Name = "MacroExecutionMode"
+    loadArgs(1).Value = com.sun.star.document.MacroExecMode.NEVER_EXECUTE
+    loadArgs(2).Name = "UpdateDocMode"
+    loadArgs(2).Value = com.sun.star.document.UpdateDocMode.NO_UPDATE
+
+    stage = "Read job"
+    job = FreeFile
+    Open ConvertFromURL(Environ("FILE_CONVERTER_JOB")) For Input As #job
+    Line Input #job, target
+    Line Input #job, source
+    stage = "Load " & source
+    doc = StarDesktop.loadComponentFromURL(source, "_blank", 0, loadArgs())
+    stage = "Create cursor in " & source
+    cursor = doc.Text.createTextCursor()
+    Do While Not EOF(job)
+        Line Input #job, source
+        stage = "Append " & source
+        cursor.gotoEnd(False)
+        doc.Text.insertControlCharacter(cursor, com.sun.star.text.ControlCharacter.PARAGRAPH_BREAK, False)
+        cursor.gotoEnd(False)
+        cursor.insertDocumentFromURL(source, loadArgs())
+    Loop
+    Close #job
+    saveArgs(0).Name = "FilterName"
+    saveArgs(0).Value = "Office Open XML Text"
+    stage = "Save " & target
+    doc.storeToURL(target, saveArgs())
+    doc.close(True)
+    StarDesktop.terminate()
+    Exit Sub
+Failed:
+    Dim log As Integer, message As String
+    message = stage & " (" & Err & "): " & Error$
+    On Error Resume Next
+    log = FreeFile
+    Open ConvertFromURL(Environ("FILE_CONVERTER_ERROR")) For Output As #log
+    Print #log, message
+    Close #log
+    If IsObject(doc) Then doc.dispose()
+    StarDesktop.terminate()
+End Sub
+]]></script:module>
