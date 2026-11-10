@@ -9,7 +9,7 @@ use std::{
 
 use anyhow::{Context, Result, ensure};
 use core::{EXTENSIONS, FileKind};
-use eframe::egui::{self, FontData, FontDefinitions, FontFamily};
+use eframe::egui::{self, Color32, FontData, FontDefinitions, FontFamily, RichText, Stroke, vec2};
 use file_converter as core;
 use rfd::FileDialog;
 
@@ -93,6 +93,45 @@ impl Action {
 
 type JobResult = Result<(PathBuf, String)>;
 
+const ACCENT: Color32 = Color32::from_rgb(29, 78, 216);
+const INK: Color32 = Color32::from_rgb(30, 41, 59);
+const MUTED: Color32 = Color32::from_rgb(71, 85, 105);
+const BORDER: Color32 = Color32::from_rgb(203, 213, 225);
+const BACKGROUND: Color32 = Color32::from_rgb(241, 245, 249);
+
+fn light_style(ctx: &egui::Context) {
+    ctx.set_theme(egui::Theme::Light);
+    ctx.style_mut(|style| {
+        style.spacing.item_spacing = vec2(8.0, 8.0);
+        style.spacing.button_padding = vec2(12.0, 6.0);
+        style.spacing.interact_size.y = 38.0;
+        for text_style in [egui::TextStyle::Body, egui::TextStyle::Button] {
+            style
+                .text_styles
+                .insert(text_style, egui::FontId::proportional(15.0));
+        }
+        let mut visuals = egui::Visuals::light();
+        visuals.panel_fill = BACKGROUND;
+        visuals.extreme_bg_color = Color32::WHITE;
+        visuals.widgets.noninteractive.fg_stroke.color = INK;
+        visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0_f32, BORDER);
+        visuals.widgets.inactive.fg_stroke.color = INK;
+        visuals.widgets.inactive.weak_bg_fill = Color32::WHITE;
+        visuals.widgets.inactive.bg_stroke = Stroke::new(1.0_f32, BORDER);
+        visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(239, 246, 255);
+        visuals.widgets.hovered.bg_stroke = Stroke::new(1.0_f32, ACCENT);
+        visuals.selection.bg_fill = Color32::from_rgb(219, 234, 254);
+        visuals.selection.stroke = Stroke::new(1.0_f32, ACCENT);
+        style.visuals = visuals;
+    });
+}
+
+fn section_frame(fill: Color32, vertical_margin: i8) -> egui::Frame {
+    egui::Frame::new()
+        .fill(fill)
+        .inner_margin(egui::Margin::symmetric(20, vertical_margin))
+}
+
 struct App {
     files: Vec<PathBuf>,
     selected: Option<usize>,
@@ -104,6 +143,7 @@ struct App {
 
 impl App {
     fn new(ctx: &egui::Context) -> Self {
+        light_style(ctx);
         if let Ok(font) = std::fs::read(r"C:\Windows\Fonts\msjh.ttc") {
             let mut fonts = FontDefinitions::default();
             fonts
@@ -229,6 +269,10 @@ impl App {
 }
 
 impl eframe::App for App {
+    fn clear_color(&self, _: &egui::Visuals) -> [f32; 4] {
+        BACKGROUND.to_normalized_gamma_f32()
+    }
+
     fn update(&mut self, ctx: &egui::Context, _: &mut eframe::Frame) {
         if let Some(worker) = &self.worker {
             match worker.try_recv() {
@@ -249,116 +293,200 @@ impl eframe::App for App {
             }
         }
 
-        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                if ui
-                    .add_enabled(
-                        self.last_output.is_some(),
-                        egui::Button::new("開啟最近輸出資料夾"),
-                    )
-                    .clicked()
-                    && let Some(path) = &self.last_output
-                    && let Err(error) = Command::new("explorer.exe").arg(path).spawn()
-                {
-                    self.status = format!("無法開啟資料夾：{error}");
-                }
-                if self.worker.is_some() {
-                    ui.spinner();
-                }
-                ui.label(&self.status);
+        egui::TopBottomPanel::top("header")
+            .min_height(90.0)
+            .frame(section_frame(Color32::WHITE, 16))
+            .show(ctx, |ui| {
+                ui.label(RichText::new("檔案轉換與排序合併").size(27.0).strong());
+                ui.label(RichText::new("加入檔案、確認順序，再選擇轉換或合併方式。").color(MUTED));
             });
-        });
 
-        egui::TopBottomPanel::bottom("operations").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.selectable_value(&mut self.merge_tab, false, "檔案互相轉換");
-                ui.selectable_value(&mut self.merge_tab, true, "依序合併");
+        egui::TopBottomPanel::bottom("status")
+            .exact_height(54.0)
+            .frame(section_frame(Color32::WHITE, 8))
+            .show(ctx, |ui| {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui
+                        .add_enabled(
+                            self.last_output.is_some(),
+                            egui::Button::new("開啟最近輸出資料夾"),
+                        )
+                        .clicked()
+                        && let Some(path) = &self.last_output
+                        && let Err(error) = Command::new("explorer.exe").arg(path).spawn()
+                    {
+                        self.status = format!("無法開啟資料夾：{error}");
+                    }
+                    ui.allocate_ui_with_layout(
+                        vec2(ui.available_width(), 38.0),
+                        egui::Layout::left_to_right(egui::Align::Center),
+                        |ui| {
+                            if self.worker.is_some() {
+                                ui.spinner();
+                            }
+                            ui.add(
+                                egui::Label::new(RichText::new(&self.status).color(MUTED))
+                                    .truncate(),
+                            )
+                            .on_hover_text(&self.status);
+                        },
+                    );
+                })
             });
-            let actions: &[(&str, Action)] = if self.merge_tab {
-                &[
-                    ("自動辨識合併", Action::AutoMerge),
-                    ("合併 PDF", Action::Merge(FileKind::Pdf)),
-                    ("圖片合併成 PDF", Action::Merge(FileKind::Image)),
-                    ("合併 Word", Action::Merge(FileKind::Word)),
-                    ("合併 ODT", Action::Merge(FileKind::Odt)),
-                ]
-            } else {
-                &[
-                    ("DOCX → ODT", Action::Convert("docx", "odt")),
-                    ("ODT → DOCX", Action::Convert("odt", "docx")),
-                    ("Word → PDF", Action::Convert("word", "pdf")),
-                    ("PDF → Word", Action::Convert("pdf", "docx")),
-                    ("圖片 → 個別 PDF", Action::IndividualImages),
-                    ("圖片 → 單一 PDF", Action::Merge(FileKind::Image)),
-                    ("PDF → 逐頁 PNG", Action::PdfImages),
-                ]
-            };
-            ui.add_enabled_ui(self.worker.is_none(), |ui| {
-                ui.horizontal_wrapped(|ui| {
-                    for &(label, action) in actions {
-                        if ui.button(label).clicked()
-                            && let Err(error) = self.start(ctx, action)
+
+        egui::TopBottomPanel::bottom("operations")
+            .min_height(190.0)
+            .frame(section_frame(BACKGROUND, 12))
+            .show_separator_line(false)
+            .show(ctx, |ui| {
+                ui.label(RichText::new("2  選擇操作").size(18.0).strong());
+                ui.horizontal(|ui| {
+                    for (merge, label) in [(false, "格式轉換"), (true, "依序合併")] {
+                        if ui
+                            .add(
+                                egui::Button::new(label)
+                                    .selected(self.merge_tab == merge)
+                                    .min_size(vec2(110.0, 38.0)),
+                            )
+                            .clicked()
                         {
-                            self.status = format!("{error:#}");
+                            self.merge_tab = merge;
                         }
                     }
                 });
+                let actions: &[(&str, Action)] = if self.merge_tab {
+                    &[
+                        ("自動辨識合併", Action::AutoMerge),
+                        ("合併 PDF", Action::Merge(FileKind::Pdf)),
+                        ("圖片合併成 PDF", Action::Merge(FileKind::Image)),
+                        ("合併 Word", Action::Merge(FileKind::Word)),
+                        ("合併 ODT", Action::Merge(FileKind::Odt)),
+                    ]
+                } else {
+                    &[
+                        ("DOCX → ODT", Action::Convert("docx", "odt")),
+                        ("ODT → DOCX", Action::Convert("odt", "docx")),
+                        ("Word → PDF", Action::Convert("word", "pdf")),
+                        ("PDF → Word", Action::Convert("pdf", "docx")),
+                        ("圖片 → 個別 PDF", Action::IndividualImages),
+                        ("圖片 → 單一 PDF", Action::Merge(FileKind::Image)),
+                        ("PDF → 逐頁 PNG", Action::PdfImages),
+                    ]
+                };
+                ui.add_enabled_ui(self.worker.is_none() && !self.files.is_empty(), |ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        for &(label, action) in actions {
+                            if ui
+                                .add(egui::Button::new(label).min_size(vec2(162.0, 40.0)))
+                                .clicked()
+                                && let Err(error) = self.start(ctx, action)
+                            {
+                                self.status = format!("{error:#}");
+                            }
+                        }
+                    });
+                });
             });
-        });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            ui.heading("檔案轉換與排序合併工具");
-            ui.horizontal_wrapped(|ui| {
-                if ui.button("新增檔案…").clicked() {
-                    self.add_files();
-                }
-                if ui
-                    .add_enabled(self.selected.is_some(), egui::Button::new("移除選取"))
-                    .clicked()
-                    && let Some(index) = self.selected
-                {
-                    self.files.remove(index);
-                    self.selected = self.files.len().checked_sub(1).map(|last| index.min(last));
-                }
-                if ui.button("全部清空").clicked() {
-                    self.files.clear();
-                    self.selected = None;
-                }
-                if ui
-                    .add_enabled(
-                        self.selected.is_some_and(|i| i > 0),
-                        egui::Button::new("上移"),
+        egui::CentralPanel::default()
+            .frame(section_frame(BACKGROUND, 14))
+            .show(ctx, |ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new("1  檔案清單").size(18.0).strong());
+                    ui.label(RichText::new(format!("{} 個檔案", self.files.len())).color(MUTED));
+                });
+                ui.horizontal_wrapped(|ui| {
+                    let add = egui::Button::new(
+                        RichText::new("新增檔案…").strong().color(Color32::WHITE),
                     )
-                    .clicked()
-                {
-                    self.move_file(-1);
-                }
-                if ui
-                    .add_enabled(
-                        self.selected.is_some_and(|i| i + 1 < self.files.len()),
-                        egui::Button::new("下移"),
-                    )
-                    .clicked()
-                {
-                    self.move_file(1);
-                }
-            });
-            ui.separator();
-            egui::ScrollArea::both().show(ui, |ui| {
-                for (index, path) in self.files.iter().enumerate() {
-                    let label = format!("[{:02}] {}", index + 1, path.display());
+                    .fill(ACCENT)
+                    .stroke(Stroke::NONE)
+                    .min_size(vec2(128.0, 42.0));
+                    if ui.add(add).clicked() {
+                        self.add_files();
+                    }
                     if ui
-                        .selectable_label(self.selected == Some(index), label)
+                        .add_enabled(
+                            self.selected.is_some_and(|i| i > 0),
+                            egui::Button::new("上移").min_size(vec2(72.0, 38.0)),
+                        )
                         .clicked()
                     {
-                        self.selected = Some(index);
+                        self.move_file(-1);
                     }
-                }
-                if self.files.is_empty() {
-                    ui.label("加入檔案後，可調整清單順序再合併。");
-                }
+                    if ui
+                        .add_enabled(
+                            self.selected.is_some_and(|i| i + 1 < self.files.len()),
+                            egui::Button::new("下移").min_size(vec2(72.0, 38.0)),
+                        )
+                        .clicked()
+                    {
+                        self.move_file(1);
+                    }
+                    if ui
+                        .add_enabled(self.selected.is_some(), egui::Button::new("移除選取"))
+                        .clicked()
+                        && let Some(index) = self.selected
+                    {
+                        self.files.remove(index);
+                        self.selected = self.files.len().checked_sub(1).map(|last| index.min(last));
+                    }
+                    if ui
+                        .add_enabled(!self.files.is_empty(), egui::Button::new("清空清單"))
+                        .clicked()
+                    {
+                        self.files.clear();
+                        self.selected = None;
+                        self.status = "已清空檔案清單".into();
+                    }
+                });
+                egui::Frame::new()
+                    .fill(Color32::WHITE)
+                    .stroke(Stroke::new(1.0_f32, BORDER))
+                    .corner_radius(8)
+                    .inner_margin(8)
+                    .show(ui, |ui| {
+                        if self.files.is_empty() {
+                            ui.centered_and_justified(|ui| {
+                                ui.label(
+                                    RichText::new("清單目前是空的。選擇「新增檔案」即可開始。")
+                                        .color(MUTED),
+                                );
+                            });
+                        } else {
+                            egui::ScrollArea::vertical()
+                                .auto_shrink([false, false])
+                                .show(ui, |ui| {
+                                    ui.spacing_mut().item_spacing.y = 3.0;
+                                    for (index, path) in self.files.iter().enumerate() {
+                                        let name = path
+                                            .file_name()
+                                            .unwrap_or(path.as_os_str())
+                                            .to_string_lossy();
+                                        let selected = self.selected == Some(index);
+                                        let row =
+                                            egui::Button::new(format!("{:02}   {name}", index + 1))
+                                                .selected(selected)
+                                                .frame_when_inactive(selected)
+                                                .truncate();
+                                        if ui
+                                            .with_layout(
+                                                egui::Layout::top_down_justified(egui::Align::Min),
+                                                |ui| {
+                                                    ui.add(row)
+                                                        .on_hover_text(path.display().to_string())
+                                                        .clicked()
+                                                },
+                                            )
+                                            .inner
+                                        {
+                                            self.selected = Some(index);
+                                        }
+                                    }
+                                });
+                        }
+                    });
             });
-        });
     }
 }
 
@@ -367,8 +495,8 @@ fn main() -> eframe::Result {
         "多功能檔案轉換與合併工具",
         eframe::NativeOptions {
             viewport: egui::ViewportBuilder::default()
-                .with_inner_size([800.0, 580.0])
-                .with_min_inner_size([680.0, 480.0]),
+                .with_inner_size([880.0, 650.0])
+                .with_min_inner_size([720.0, 540.0]),
             ..Default::default()
         },
         Box::new(|cc| Ok(Box::new(App::new(&cc.egui_ctx)))),

@@ -12,13 +12,22 @@ import file_converter as fc
 
 SUPPORTED_IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".bmp", ".webp", ".tiff", ".tif"}
 
+BACKGROUND = "#f1f5f9"
+SURFACE = "#ffffff"
+INK = "#1e293b"
+MUTED = "#475569"
+BORDER = "#cbd5e1"
+ACCENT = "#1d4ed8"
+SELECTED = "#dbeafe"
+FONT = "Microsoft JhengHei UI"
+
 
 class FileConverterApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("多功能檔案轉換與合併工具")
-        self.root.geometry("760x620")
-        self.root.minsize(680, 520)
+        self.root.geometry("880x700")
+        self.root.minsize(720, 580)
 
         # 檔案清單數據 [(display_name, full_path), ...]
         self.file_items = []
@@ -28,12 +37,27 @@ class FileConverterApp:
         self._check_dependencies()
 
     def _setup_style(self):
-        style = ttk.Style()
+        self.root.configure(background=BACKGROUND)
+        style = ttk.Style(self.root)
         style.theme_use("clam")
-        style.configure("TButton", font=("Segoe UI", 9), padding=5)
-        style.configure("Header.TLabel", font=("Segoe UI", 11, "bold"))
-        style.configure("Status.TLabel", font=("Segoe UI", 9))
-        style.configure("Accent.TButton", font=("Segoe UI", 10, "bold"), padding=6)
+        style.configure("TFrame", background=BACKGROUND)
+        style.configure("Surface.TFrame", background=SURFACE)
+        style.configure("TLabel", background=BACKGROUND, foreground=INK, font=(FONT, 10))
+        style.configure("Title.TLabel", background=SURFACE, font=(FONT, 19, "bold"))
+        style.configure("Section.TLabel", font=(FONT, 12, "bold"))
+        style.configure("Muted.TLabel", foreground=MUTED)
+        style.configure("Status.TLabel", background=SURFACE, foreground=MUTED)
+        style.configure("TButton", background=SURFACE, foreground=INK, bordercolor=BORDER,
+                        font=(FONT, 10), padding=(12, 8))
+        style.map("TButton", background=[("disabled", BACKGROUND), ("pressed", SELECTED), ("active", "#eff6ff")],
+                  foreground=[("disabled", "#64748b")])
+        style.configure("Accent.TButton", background=ACCENT, foreground=SURFACE, bordercolor=ACCENT,
+                        font=(FONT, 10, "bold"), padding=(14, 9))
+        style.map("Accent.TButton", background=[("pressed", "#1e3a8a"), ("active", "#1e40af")])
+        style.configure("TNotebook", background=BACKGROUND, bordercolor=BORDER)
+        style.configure("TNotebook.Tab", background=BACKGROUND, foreground=INK,
+                        font=(FONT, 10, "bold"), padding=(16, 8))
+        style.map("TNotebook.Tab", background=[("selected", SELECTED), ("active", "#eff6ff")])
 
     def _check_dependencies(self):
         soffice = fc.find_libreoffice()
@@ -43,110 +67,116 @@ class FileConverterApp:
             self.set_status(f"就緒 (已連結 LibreOffice: {Path(soffice).name})")
 
     def _build_ui(self):
-        # 頂部提示
-        top_frame = ttk.Frame(self.root, padding="12 10 12 5")
+        top_frame = ttk.Frame(self.root, style="Surface.TFrame", padding=(20, 14))
         top_frame.pack(fill=tk.X)
-        ttk.Label(
-            top_frame,
-            text="檔案轉換與排序合併工具 (DOCX / ODT / 圖片 / PDF)",
-            style="Header.TLabel"
-        ).pack(side=tk.LEFT)
+        ttk.Label(top_frame, text="檔案轉換與排序合併", style="Title.TLabel").pack(anchor=tk.W)
+        ttk.Label(top_frame, text="加入檔案、確認順序，再選擇轉換或合併方式。",
+                  style="Status.TLabel").pack(anchor=tk.W, pady=(3, 0))
 
-        # 主要內容區域：左側檔案清單，右側排序與操作按鈕
-        content_frame = ttk.Frame(self.root, padding="12 5 12 5")
-        content_frame.pack(fill=tk.BOTH, expand=True)
-
-        # 清單框架
-        list_frame = ttk.LabelFrame(content_frame, text=" 檔案清單 (可多選並調整上下順序) ", padding=8)
-        list_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-
-        self.listbox = tk.Listbox(
-            list_frame,
-            selectmode=tk.SINGLE,
-            font=("Segoe UI", 9),
-            activestyle="none",
-            highlightthickness=1,
-            relief=tk.FLAT
-        )
-        scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.listbox.yview)
-        self.listbox.configure(yscrollcommand=scrollbar.set)
-        self.listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # 側邊清單管理與排序按鈕
-        side_btn_frame = ttk.Frame(content_frame, padding="8 0 0 0")
-        side_btn_frame.pack(side=tk.RIGHT, fill=tk.Y)
-
-        ttk.Button(side_btn_frame, text="＋ 新增檔案...", command=self.add_files).pack(fill=tk.X, pady=3)
-        ttk.Button(side_btn_frame, text="－ 移除選取", command=self.remove_selected).pack(fill=tk.X, pady=3)
-        ttk.Button(side_btn_frame, text="✖ 全部清空", command=self.clear_all).pack(fill=tk.X, pady=3)
-
-        ttk.Separator(side_btn_frame, orient=tk.HORIZONTAL).pack(fill=tk.X, pady=10)
-
-        ttk.Label(side_btn_frame, text="順序調整:").pack(anchor=tk.W)
-        ttk.Button(side_btn_frame, text="▲ 上移一層", command=self.move_up).pack(fill=tk.X, pady=3)
-        ttk.Button(side_btn_frame, text="▼ 下移一層", command=self.move_down).pack(fill=tk.X, pady=3)
-
-        # 下方功能分頁／執行區域
-        action_frame = ttk.LabelFrame(self.root, text=" 執行操作 ", padding=10)
-        action_frame.pack(fill=tk.X, padx=12, pady=8)
-
-        # 功能標籤 notebook
-        notebook = ttk.Notebook(action_frame)
-        notebook.pack(fill=tk.X)
-
-        # 分頁 1: 檔案格式互相轉換
-        convert_tab = ttk.Frame(notebook, padding=10)
-        notebook.add(convert_tab, text=" 檔案互相轉換 ")
-
-        c_row1 = ttk.Frame(convert_tab)
-        c_row1.pack(fill=tk.X, pady=3)
-        ttk.Label(c_row1, text="Word/ODT轉換:", width=14).pack(side=tk.LEFT)
-        ttk.Button(c_row1, text="DOCX ➔ ODT", command=lambda: self.run_async(self.convert_docx_to_odt_action)).pack(side=tk.LEFT, padx=4)
-        ttk.Button(c_row1, text="ODT ➔ DOCX", command=lambda: self.run_async(self.convert_odt_to_docx_action)).pack(side=tk.LEFT, padx=4)
-
-        c_row2 = ttk.Frame(convert_tab)
-        c_row2.pack(fill=tk.X, pady=3)
-        ttk.Label(c_row2, text="Word/PDF轉換:", width=14).pack(side=tk.LEFT)
-        ttk.Button(c_row2, text="Word ➔ PDF (.doc/.docx)", command=lambda: self.run_async(self.convert_doc_to_pdf_action)).pack(side=tk.LEFT, padx=4)
-        ttk.Button(c_row2, text="PDF ➔ Word (.docx)", command=lambda: self.run_async(self.convert_pdf_to_docx_action)).pack(side=tk.LEFT, padx=4)
-
-        c_row3 = ttk.Frame(convert_tab)
-        c_row3.pack(fill=tk.X, pady=3)
-        ttk.Label(c_row3, text="圖片/PDF轉換:", width=14).pack(side=tk.LEFT)
-        ttk.Button(c_row3, text="圖片 ➔ PDF (各圖或單一)", command=lambda: self.run_async(self.convert_images_to_pdf_action)).pack(side=tk.LEFT, padx=4)
-        ttk.Button(c_row3, text="PDF ➔ 圖片 (匯出每頁)", command=lambda: self.run_async(self.convert_pdf_to_images_action)).pack(side=tk.LEFT, padx=4)
-
-        # 分頁 2: 同類型檔案依序合併
-        merge_tab = ttk.Frame(notebook, padding=10)
-        notebook.add(merge_tab, text=" 同檔案類型依序合併 ")
-
-        m_info = ttk.Label(
-            merge_tab,
-            text="說明：將清單中同類型檔案，按照上述清單順序合併為單一檔案。"
-        )
-        m_info.pack(anchor=tk.W, pady=(0, 6))
-
-        m_btn_row = ttk.Frame(merge_tab)
-        m_btn_row.pack(fill=tk.X, pady=4)
-
-        ttk.Button(m_btn_row, text="⚡ 自動辨識合併", style="Accent.TButton", command=lambda: self.run_async(self.auto_merge_action)).pack(side=tk.LEFT, padx=4)
-        ttk.Button(m_btn_row, text="合併 PDF 檔", command=lambda: self.run_async(self.merge_pdf_action)).pack(side=tk.LEFT, padx=4)
-        ttk.Button(m_btn_row, text="多張圖片合併成單一 PDF", command=lambda: self.run_async(self.merge_images_action)).pack(side=tk.LEFT, padx=4)
-        ttk.Button(m_btn_row, text="合併 DOCX 檔", command=lambda: self.run_async(self.merge_docx_action)).pack(side=tk.LEFT, padx=4)
-        ttk.Button(m_btn_row, text="合併 ODT 檔", command=lambda: self.run_async(self.merge_odt_action)).pack(side=tk.LEFT, padx=4)
-
-        # 底部狀態列
-        bottom_frame = ttk.Frame(self.root, padding="12 4 12 8")
-        bottom_frame.pack(fill=tk.X)
-
-        self.status_var = tk.StringVar(value="就緒")
-        self.status_lbl = ttk.Label(bottom_frame, textvariable=self.status_var, style="Status.TLabel")
-        self.status_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True)
-
-        self.open_dir_btn = ttk.Button(bottom_frame, text="開啟最近輸出資料夾", state=tk.DISABLED, command=self.open_last_output_dir)
+        bottom_frame = ttk.Frame(self.root, style="Surface.TFrame", padding=(20, 8))
+        bottom_frame.pack(side=tk.BOTTOM, fill=tk.X)
+        self.open_dir_btn = ttk.Button(bottom_frame, text="開啟最近輸出資料夾", state=tk.DISABLED,
+                                       command=self.open_last_output_dir)
         self.open_dir_btn.pack(side=tk.RIGHT)
         self.last_output_dir = None
+        self.status_var = tk.StringVar(value="就緒")
+        self.status_lbl = ttk.Label(bottom_frame, textvariable=self.status_var, style="Status.TLabel")
+        self.status_lbl.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 12))
+        self.status_lbl.bind("<Configure>", lambda event: self.status_lbl.configure(wraplength=event.width))
+
+        content_frame = ttk.Frame(self.root, padding=(20, 12, 20, 0))
+        list_heading = ttk.Frame(content_frame)
+        list_heading.pack(fill=tk.X, pady=(0, 8))
+        ttk.Label(list_heading, text="1  檔案清單", style="Section.TLabel").pack(side=tk.LEFT)
+        self.file_count = ttk.Label(list_heading, style="Muted.TLabel")
+        self.file_count.pack(side=tk.LEFT, padx=10)
+
+        controls = ttk.Frame(content_frame)
+        controls.pack(fill=tk.X, pady=(0, 8))
+        ttk.Button(controls, text="新增檔案…", style="Accent.TButton",
+                   command=self.add_files).pack(side=tk.LEFT, padx=(0, 8))
+        for attr, label, command in (
+            ("move_up_btn", "上移", self.move_up),
+            ("move_down_btn", "下移", self.move_down),
+            ("remove_btn", "移除選取", self.remove_selected),
+            ("clear_btn", "清空清單", self.clear_all),
+        ):
+            button = ttk.Button(controls, text=label, width=8, command=command)
+            button.pack(side=tk.LEFT, padx=(0, 8))
+            setattr(self, attr, button)
+
+        list_frame = ttk.Frame(content_frame)
+        list_frame.pack(fill=tk.BOTH, expand=True)
+        list_frame.columnconfigure(0, weight=1)
+        list_frame.rowconfigure(0, weight=1)
+        self.listbox = tk.Listbox(
+            list_frame, selectmode=tk.SINGLE, exportselection=False,
+            font=(FONT, 11), height=5, activestyle="none", relief=tk.FLAT,
+            background=SURFACE, foreground=INK, selectbackground=SELECTED, selectforeground=INK,
+            highlightthickness=1, highlightbackground=BORDER, highlightcolor=ACCENT,
+        )
+        vertical = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.listbox.yview)
+        horizontal = ttk.Scrollbar(list_frame, orient=tk.HORIZONTAL, command=self.listbox.xview)
+        self.listbox.configure(yscrollcommand=vertical.set, xscrollcommand=horizontal.set)
+        self.listbox.grid(row=0, column=0, sticky="nsew")
+        vertical.grid(row=0, column=1, sticky="ns")
+        horizontal.grid(row=1, column=0, sticky="ew")
+        self.empty_hint = ttk.Label(list_frame, text="清單目前是空的。選擇「新增檔案」即可開始。",
+                                    style="Status.TLabel")
+        self.listbox.bind("<<ListboxSelect>>", self._update_file_controls)
+
+        action_frame = ttk.Frame(self.root, padding=(20, 12))
+        action_frame.pack(side=tk.BOTTOM, fill=tk.X)
+        ttk.Label(action_frame, text="2  選擇操作", style="Section.TLabel").pack(anchor=tk.W, pady=(0, 8))
+        notebook = ttk.Notebook(action_frame)
+        notebook.pack(fill=tk.X)
+        self.action_buttons = []
+        for name, actions in (
+            ("格式轉換", (
+                ("DOCX → ODT", self.convert_docx_to_odt_action),
+                ("ODT → DOCX", self.convert_odt_to_docx_action),
+                ("Word → PDF", self.convert_doc_to_pdf_action),
+                ("PDF → Word", self.convert_pdf_to_docx_action),
+                ("圖片 → PDF", self.convert_images_to_pdf_action),
+                ("PDF → 逐頁圖片", self.convert_pdf_to_images_action),
+            )),
+            ("依序合併", (
+                ("自動辨識合併", self.auto_merge_action),
+                ("合併 PDF", self.merge_pdf_action),
+                ("圖片合併成 PDF", self.merge_images_action),
+                ("合併 DOCX", self.merge_docx_action),
+                ("合併 ODT", self.merge_odt_action),
+            )),
+        ):
+            tab = ttk.Frame(notebook, style="Surface.TFrame", padding=8)
+            notebook.add(tab, text=name)
+            for column in range(3):
+                tab.columnconfigure(column, weight=1, uniform="actions")
+            for index, (label, action) in enumerate(actions):
+                row, column = divmod(index, 3)
+                button = ttk.Button(tab, text=label, command=lambda action=action: self.run_async(action))
+                button.grid(row=row, column=column, padx=4, pady=4, sticky="ew")
+                self.action_buttons.append(button)
+        content_frame.pack(fill=tk.BOTH, expand=True)
+        self._update_file_controls()
+
+    def _update_file_controls(self, event=None):
+        count = len(self.file_items)
+        selected = self.listbox.curselection()
+        self.file_count.configure(text=f"{count} 個檔案")
+        if count:
+            self.empty_hint.place_forget()
+        else:
+            self.empty_hint.place(in_=self.listbox, relx=0.5, rely=0.5, anchor=tk.CENTER)
+        for button, enabled in (
+            (self.move_up_btn, selected and selected[0] > 0),
+            (self.move_down_btn, selected and selected[0] + 1 < count),
+            (self.remove_btn, selected),
+            (self.clear_btn, count),
+        ):
+            button.state(["!disabled" if enabled else "disabled"])
+        for button in self.action_buttons:
+            button.state(["!disabled" if count else "disabled"])
 
     # ---------- 清單管理與排序 ----------
 
@@ -177,10 +207,7 @@ class FileConverterApp:
             return
         idx = sel[0]
         del self.file_items[idx]
-        self._refresh_listbox()
-        if self.file_items:
-            new_idx = min(idx, len(self.file_items) - 1)
-            self.listbox.selection_set(new_idx)
+        self._refresh_listbox(min(idx, len(self.file_items) - 1) if self.file_items else None)
         self.set_status(f"已移除項目，目前剩餘 {len(self.file_items)} 個檔案。")
 
     def clear_all(self):
@@ -199,8 +226,7 @@ class FileConverterApp:
             return
         # 交換
         self.file_items[idx - 1], self.file_items[idx] = self.file_items[idx], self.file_items[idx - 1]
-        self._refresh_listbox()
-        self.listbox.selection_set(idx - 1)
+        self._refresh_listbox(idx - 1)
 
     def move_down(self):
         sel = self.listbox.curselection()
@@ -211,14 +237,18 @@ class FileConverterApp:
             return
         # 交換
         self.file_items[idx + 1], self.file_items[idx] = self.file_items[idx], self.file_items[idx + 1]
-        self._refresh_listbox()
-        self.listbox.selection_set(idx + 1)
+        self._refresh_listbox(idx + 1)
 
-    def _refresh_listbox(self):
+    def _refresh_listbox(self, selected=None):
         self.listbox.delete(0, tk.END)
         for i, path in enumerate(self.file_items, 1):
             name = Path(path).name
-            self.listbox.insert(tk.END, f"[{i:02d}] {name}  ({path})")
+            self.listbox.insert(tk.END, f"  {i:02d}   {name}   ·   {Path(path).parent}")
+        if selected is not None:
+            self.listbox.selection_set(selected)
+            self.listbox.activate(selected)
+            self.listbox.see(selected)
+        self._update_file_controls()
 
     def set_status(self, text: str):
         self.status_var.set(text)

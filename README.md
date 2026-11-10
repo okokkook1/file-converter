@@ -4,7 +4,7 @@ Windows x64 桌面工具。可先調整檔案清單順序，再執行批次轉�
 
 ## Windows x64 下載
 
-[下載 Rust 免安裝版](https://github.com/okokkook1/file-converter/releases/download/v2.0.0/file-converter-rust-windows-x64.zip)。完整解壓後雙擊 `FileConverter.exe`，並保留同一資料夾內的執行期資源。
+[下載 Rust 免安裝版](https://github.com/okokkook1/file-converter/releases/download/v2.0.1/file-converter-rust-windows-x64.zip)。完整解壓後雙擊 `FileConverter.exe`，並保留同一資料夾內的執行期資源。
 
 - 支援 DOCX ⇄ ODT、DOC／DOCX → PDF、PDF → DOCX、圖片 → PDF，以及 PDF 逐頁匯出 PNG。
 - 可依指定順序合併 PDF、Word、ODT，或將多張圖片合併成一份 PDF。
